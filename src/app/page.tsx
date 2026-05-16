@@ -226,15 +226,25 @@ export default function ArchiveApp() {
   // Auth state
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [showLogin, setShowLogin] = useState(true) // true = login, false = register
+  const [adminExists, setAdminExists] = useState(false)
+  const [adminSetupMode, setAdminSetupMode] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
-  const [registerName, setRegisterName] = useState('')
-  const [registerEmail, setRegisterEmail] = useState('')
-  const [registerPassword, setRegisterPassword] = useState('')
-  const [registerDept, setRegisterDept] = useState('')
+  const [setupName, setSetupName] = useState('')
+  const [setupEmail, setSetupEmail] = useState('')
+  const [setupPassword, setSetupPassword] = useState('')
+  const [setupDept, setSetupDept] = useState('')
   const [authError, setAuthError] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
+
+  // Add user dialog state
+  const [showAddUserDialog, setShowAddUserDialog] = useState(false)
+  const [newUserName, setNewUserName] = useState('')
+  const [newUserEmail, setNewUserEmail] = useState('')
+  const [newUserPassword, setNewUserPassword] = useState('')
+  const [newUserRole, setNewUserRole] = useState('user')
+  const [newUserDept, setNewUserDept] = useState('')
+  const [addUserSubmitting, setAddUserSubmitting] = useState(false)
 
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -324,14 +334,24 @@ export default function ArchiveApp() {
     }
   }, [])
 
-  // Check session on mount
+  // Check session and admin status on mount
   useEffect(() => {
-    const checkSession = () => {
+    const checkSession = async () => {
       try {
         const stored = localStorage.getItem('archive_user')
         if (stored) {
           const user = JSON.parse(stored)
           setAuthUser(user)
+        }
+
+        // Check if admin exists
+        const adminRes = await fetch('/api/auth/check-admin')
+        const adminData = await adminRes.json()
+        setAdminExists(adminData.adminExists)
+
+        // If no admin and no stored user, show setup mode
+        if (!adminData.adminExists && !stored) {
+          setAdminSetupMode(true)
         }
       } catch (e) {
         localStorage.removeItem('archive_user')
@@ -366,26 +386,28 @@ export default function ArchiveApp() {
     setAuthSubmitting(false)
   }
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleAdminSetup = async (e: React.FormEvent) => {
     e.preventDefault()
     setAuthError('')
     setAuthSubmitting(true)
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch('/api/auth/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: registerName,
-          email: registerEmail,
-          password: registerPassword,
-          department: registerDept,
+          name: setupName,
+          email: setupEmail,
+          password: setupPassword,
+          department: setupDept,
         }),
       })
       const data = await res.json()
       if (res.ok) {
         setAuthUser(data.user)
+        setAdminExists(true)
+        setAdminSetupMode(false)
         localStorage.setItem('archive_user', JSON.stringify(data.user))
-        toast({ title: `مرحباً ${data.user.name}، تم إنشاء حسابك بنجاح` })
+        toast({ title: `مرحباً ${data.user.name}، تم إنشاء حساب المسؤول بنجاح` })
       } else {
         setAuthError(data.error || 'حدث خطأ')
       }
@@ -393,6 +415,43 @@ export default function ArchiveApp() {
       setAuthError('حدث خطأ في الاتصال')
     }
     setAuthSubmitting(false)
+  }
+
+  const handleAddUser = async () => {
+    if (!authUser) return
+    setAddUserSubmitting(true)
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': authUser.id,
+        },
+        body: JSON.stringify({
+          name: newUserName,
+          email: newUserEmail,
+          password: newUserPassword,
+          role: newUserRole,
+          department: newUserDept,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: 'تم إنشاء المستخدم بنجاح' })
+        setShowAddUserDialog(false)
+        setNewUserName('')
+        setNewUserEmail('')
+        setNewUserPassword('')
+        setNewUserRole('user')
+        setNewUserDept('')
+        fetchUsers()
+      } else {
+        toast({ title: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+    setAddUserSubmitting(false)
   }
 
   const handleLogout = () => {
@@ -548,16 +607,18 @@ export default function ArchiveApp() {
     }
   }
 
-  // Navigation items
-  const navItems = [
-    { id: 'dashboard' as PageType, label: 'لوحة التحكم', icon: <Home className="h-5 w-5" /> },
-    { id: 'incoming' as PageType, label: 'الوارد', icon: <Inbox className="h-5 w-5" /> },
-    { id: 'outgoing' as PageType, label: 'الصادر', icon: <Send className="h-5 w-5" /> },
-    { id: 'search' as PageType, label: 'البحث المتقدم', icon: <Search className="h-5 w-5" /> },
-    { id: 'reports' as PageType, label: 'التقارير', icon: <BarChart3 className="h-5 w-5" /> },
-    { id: 'departments' as PageType, label: 'الأقسام', icon: <Building2 className="h-5 w-5" /> },
-    { id: 'users' as PageType, label: 'المستخدمون', icon: <Users className="h-5 w-5" /> },
+  // Navigation items (filtered by role)
+  const allNavItems = [
+    { id: 'dashboard' as PageType, label: 'لوحة التحكم', icon: <Home className="h-5 w-5" />, adminOnly: false },
+    { id: 'incoming' as PageType, label: 'الوارد', icon: <Inbox className="h-5 w-5" />, adminOnly: false },
+    { id: 'outgoing' as PageType, label: 'الصادر', icon: <Send className="h-5 w-5" />, adminOnly: false },
+    { id: 'search' as PageType, label: 'البحث المتقدم', icon: <Search className="h-5 w-5" />, adminOnly: false },
+    { id: 'reports' as PageType, label: 'التقارير', icon: <BarChart3 className="h-5 w-5" />, adminOnly: false },
+    { id: 'departments' as PageType, label: 'الأقسام', icon: <Building2 className="h-5 w-5" />, adminOnly: false },
+    { id: 'users' as PageType, label: 'المستخدمون', icon: <Users className="h-5 w-5" />, adminOnly: true },
   ]
+
+  const navItems = allNavItems.filter(item => !item.adminOnly || authUser?.role === 'admin')
 
   // ============= RENDER SECTIONS =============
 
@@ -1362,6 +1423,12 @@ export default function ArchiveApp() {
           </h2>
           <p className="text-muted-foreground text-sm mt-1">{users.length} مستخدم</p>
         </div>
+        {authUser?.role === 'admin' && (
+          <Button className="gap-2" onClick={() => setShowAddUserDialog(true)}>
+            <Plus className="h-4 w-4" />
+            إضافة مستخدم
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -1407,6 +1474,90 @@ export default function ArchiveApp() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Add User Dialog */}
+      <Dialog open={showAddUserDialog} onOpenChange={setShowAddUserDialog}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCircle className="h-5 w-5" />
+              إضافة مستخدم جديد
+            </DialogTitle>
+            <DialogDescription>أدخل بيانات المستخدم الجديد</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>الاسم الكامل *</Label>
+              <Input
+                placeholder="أحمد محمد"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>البريد الإلكتروني *</Label>
+              <Input
+                type="email"
+                placeholder="ahmed@example.com"
+                value={newUserEmail}
+                onChange={(e) => setNewUserEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>كلمة المرور *</Label>
+              <Input
+                type="password"
+                placeholder="6 أحرف على الأقل"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                minLength={6}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>الصلاحية</Label>
+              <Select value={newUserRole} onValueChange={setNewUserRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">مستخدم</SelectItem>
+                  <SelectItem value="manager">مشرف</SelectItem>
+                  <SelectItem value="admin">مدير النظام</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>القسم (اختياري)</Label>
+              <Select value={newUserDept} onValueChange={setNewUserDept}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر القسم" />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                onClick={handleAddUser}
+                disabled={!newUserName || !newUserEmail || !newUserPassword || addUserSubmitting}
+              >
+                {addUserSubmitting ? (
+                  <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Plus className="h-4 w-4 ml-1" />
+                )}
+                إنشاء المستخدم
+              </Button>
+              <Button variant="outline" onClick={() => setShowAddUserDialog(false)}>
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 
@@ -1826,7 +1977,120 @@ export default function ArchiveApp() {
     )
   }
 
-  // Login / Register Screen
+  // Admin Setup Screen
+  if (adminSetupMode && !authUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-background to-orange-50 p-4" dir="rtl">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-lg"
+        >
+          <Card className="shadow-2xl border-amber-200">
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">
+                <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <Shield className="h-10 w-10 text-white" />
+                </div>
+              </div>
+              <CardTitle className="text-2xl text-amber-800">
+                إعداد حساب المسؤول
+              </CardTitle>
+              <CardDescription className="text-amber-700">
+                هذه هي الخطوة الأولى لتفعيل نظام الأرشفة
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Warning/info message */}
+              <div className="mb-6 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold mb-1">إعداد أولي - يحدث مرة واحدة فقط</p>
+                  <p className="text-amber-700">هذا الحساب سيكون له صلاحيات كاملة لإدارة النظام والمستخدمين. بعد إنشاء حساب المسؤول، لن يظهر هذا الإعداد مرة أخرى.</p>
+                </div>
+              </div>
+
+              {authError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {authError}
+                </div>
+              )}
+
+              <form onSubmit={handleAdminSetup} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>الاسم الكامل *</Label>
+                  <div className="relative">
+                    <UserCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="أحمد محمد"
+                      className="pr-10"
+                      value={setupName}
+                      onChange={(e) => setSetupName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>البريد الإلكتروني *</Label>
+                  <div className="relative">
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="admin@example.com"
+                      className="pr-10"
+                      value={setupEmail}
+                      onChange={(e) => setSetupEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>كلمة المرور *</Label>
+                  <div className="relative">
+                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="password"
+                      placeholder="6 أحرف على الأقل"
+                      className="pr-10"
+                      value={setupPassword}
+                      onChange={(e) => setSetupPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>القسم (اختياري)</Label>
+                  <Select value={setupDept} onValueChange={setSetupDept}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر القسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="w-full bg-gradient-to-l from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white" disabled={authSubmitting}>
+                  {authSubmitting ? (
+                    <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <Shield className="h-4 w-4 ml-2" />
+                  )}
+                  إنشاء حساب المسؤول
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Login Screen
   if (!authUser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4" dir="rtl">
@@ -1843,13 +2107,9 @@ export default function ArchiveApp() {
                   <Archive className="h-8 w-8 text-primary-foreground" />
                 </div>
               </div>
-              <CardTitle className="text-2xl">
-                {showLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
-              </CardTitle>
+              <CardTitle className="text-2xl">تسجيل الدخول</CardTitle>
               <CardDescription>
-                {showLogin
-                  ? 'أدخل بيانات حسابك للوصول إلى نظام الأرشفة'
-                  : 'أنشئ حساباً جديداً للبدء باستخدام النظام'}
+                أدخل بيانات حسابك للوصول إلى نظام الأرشفة
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1860,123 +2120,52 @@ export default function ArchiveApp() {
                 </div>
               )}
 
-              {showLogin ? (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">البريد الإلكتروني</Label>
-                    <div className="relative">
-                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="ahmed@example.com"
-                        className="pr-10"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">كلمة المرور</Label>
-                    <div className="relative">
-                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="••••••"
-                        className="pr-10"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={authSubmitting}>
-                    {authSubmitting ? (
-                      <RefreshCw className="h-4 w-4 animate-spin ml-2" />
-                    ) : (
-                      <LogOut className="h-4 w-4 ml-2 rotate-180" />
-                    )}
-                    تسجيل الدخول
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>الاسم الكامل</Label>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">البريد الإلكتروني</Label>
+                  <div className="relative">
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="أحمد محمد"
-                      value={registerName}
-                      onChange={(e) => setRegisterName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>البريد الإلكتروني</Label>
-                    <Input
+                      id="email"
                       type="email"
                       placeholder="ahmed@example.com"
-                      value={registerEmail}
-                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      className="pr-10"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>كلمة المرور</Label>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">كلمة المرور</Label>
+                  <div className="relative">
+                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
+                      id="password"
                       type="password"
-                      placeholder="6 أحرف على الأقل"
-                      value={registerPassword}
-                      onChange={(e) => setRegisterPassword(e.target.value)}
+                      placeholder="••••••"
+                      className="pr-10"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
                       required
-                      minLength={6}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>القسم (اختياري)</Label>
-                    <Select value={registerDept} onValueChange={setRegisterDept}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="اختر القسم" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departments.map((d) => (
-                          <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full" disabled={authSubmitting}>
-                    {authSubmitting ? (
-                      <RefreshCw className="h-4 w-4 animate-spin ml-2" />
-                    ) : (
-                      <Plus className="h-4 w-4 ml-2" />
-                    )}
-                    إنشاء الحساب
-                  </Button>
-                </form>
-              )}
+                </div>
+                <Button type="submit" className="w-full" disabled={authSubmitting}>
+                  {authSubmitting ? (
+                    <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                  ) : (
+                    <LogOut className="h-4 w-4 ml-2 rotate-180" />
+                  )}
+                  تسجيل الدخول
+                </Button>
+              </form>
 
               <div className="mt-6 pt-4 border-t text-center">
                 <p className="text-sm text-muted-foreground">
-                  {showLogin ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'}
-                  <button
-                    onClick={() => { setShowLogin(!showLogin); setAuthError('') }}
-                    className="text-primary font-medium hover:underline mr-1"
-                  >
-                    {showLogin ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}
-                  </button>
+                  لتسجيل حساب جديد، تواصل مع مسؤول النظام
                 </p>
               </div>
-
-              {showLogin && (
-                <div className="mt-4 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
-                  <p className="font-medium mb-1">حسابات تجريبية (كلمة المرور: 123456)</p>
-                  <p>ahmed@example.com - مدير النظام</p>
-                  <p>khaled@example.com - مشرف</p>
-                  <p>fatima@example.com - مستخدم</p>
-                </div>
-              )}
             </CardContent>
           </Card>
         </motion.div>
@@ -1989,22 +2178,37 @@ export default function ArchiveApp() {
     <div className="min-h-screen flex bg-background" dir="rtl">
       {/* Sidebar */}
       <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-card border-l transition-all duration-300 flex flex-col shrink-0`}>
-        {/* Logo */}
-        <div className="h-16 flex items-center justify-between px-4 border-b">
-          {sidebarOpen && (
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <Archive className="h-4 w-4 text-primary-foreground" />
+        {/* Logo & User Info */}
+        <div className="border-b">
+          <div className="h-16 flex items-center justify-between px-4">
+            {sidebarOpen && (
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+                  <Archive className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <div>
+                  <h1 className="font-bold text-sm">نظام الأرشفة</h1>
+                  <p className="text-xs text-muted-foreground">المراسلات الرسمية</p>
+                </div>
               </div>
-              <div>
-                <h1 className="font-bold text-sm">نظام الأرشفة</h1>
-                <p className="text-xs text-muted-foreground">المراسلات الرسمية</p>
+            )}
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              <Menu className="h-4 w-4" />
+            </Button>
+          </div>
+          {sidebarOpen && authUser && (
+            <div className="px-4 pb-3 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                {authUser.name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{authUser.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {authUser.role === 'admin' ? 'مدير النظام' : authUser.role === 'manager' ? 'مشرف' : 'مستخدم'}
+                </p>
               </div>
             </div>
           )}
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Menu className="h-4 w-4" />
-          </Button>
         </div>
 
         {/* Navigation */}
@@ -2100,7 +2304,15 @@ export default function ArchiveApp() {
                 {currentPage === 'search' && renderSearch()}
                 {currentPage === 'reports' && renderReports()}
                 {currentPage === 'departments' && renderDepartments()}
-                {currentPage === 'users' && renderUsers()}
+                {currentPage === 'users' && authUser?.role === 'admin' && renderUsers()}
+                {currentPage === 'users' && authUser?.role !== 'admin' && (
+                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
+                    <Shield className="h-12 w-12 mb-3" />
+                    <p className="text-lg font-medium">غير مصرح</p>
+                    <p className="text-sm">هذه الصفحة متاحة فقط لمدير النظام</p>
+                    <Button variant="outline" className="mt-4" onClick={() => setCurrentPage('dashboard')}>العودة للوحة التحكم</Button>
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
           )}
