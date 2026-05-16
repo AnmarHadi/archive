@@ -2,9 +2,11 @@ import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 
-// GET - List all users
-export async function GET() {
+// GET - List all users (role-based filtering)
+export async function GET(request: NextRequest) {
   try {
+    const userRole = request.headers.get('x-user-role') || 'user'
+
     const users = await db.user.findMany({
       orderBy: { name: 'asc' },
       select: {
@@ -17,7 +19,13 @@ export async function GET() {
         createdAt: true,
       },
     })
-    return NextResponse.json({ data: users })
+
+    // Hide admin accounts from non-admin users
+    const filteredUsers = userRole === 'admin'
+      ? users
+      : users.filter(u => u.role !== 'admin')
+
+    return NextResponse.json({ data: filteredUsers })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
   }

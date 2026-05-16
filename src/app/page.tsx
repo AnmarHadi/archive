@@ -336,13 +336,15 @@ export default function ArchiveApp() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/users')
+      const headers: Record<string, string> = {}
+      if (authUser?.role) headers['x-user-role'] = authUser.role
+      const res = await fetch('/api/users', { headers })
       const data = await res.json()
       if (data.data) setUsers(data.data)
     } catch (error) {
       console.error('Error fetching users:', error)
     }
-  }, [])
+  }, [authUser?.role])
 
   // Check session and admin status on mount
   useEffect(() => {
@@ -662,16 +664,16 @@ export default function ArchiveApp() {
 
   // Navigation items (filtered by role)
   const allNavItems = [
-    { id: 'dashboard' as PageType, label: 'لوحة التحكم', icon: <Home className="h-5 w-5" />, adminOnly: false },
-    { id: 'incoming' as PageType, label: 'الوارد', icon: <Inbox className="h-5 w-5" />, adminOnly: false },
-    { id: 'outgoing' as PageType, label: 'الصادر', icon: <Send className="h-5 w-5" />, adminOnly: false },
-    { id: 'search' as PageType, label: 'البحث المتقدم', icon: <Search className="h-5 w-5" />, adminOnly: false },
-    { id: 'reports' as PageType, label: 'التقارير', icon: <BarChart3 className="h-5 w-5" />, adminOnly: false },
-    { id: 'departments' as PageType, label: 'الأقسام', icon: <Building2 className="h-5 w-5" />, adminOnly: false },
-    { id: 'users' as PageType, label: 'المستخدمون', icon: <Users className="h-5 w-5" />, adminOnly: true },
+    { id: 'dashboard' as PageType, label: 'لوحة التحكم', icon: <Home className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'incoming' as PageType, label: 'الوارد', icon: <Inbox className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'outgoing' as PageType, label: 'الصادر', icon: <Send className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'search' as PageType, label: 'البحث المتقدم', icon: <Search className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'reports' as PageType, label: 'التقارير', icon: <BarChart3 className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'departments' as PageType, label: 'الأقسام', icon: <Building2 className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'users' as PageType, label: 'المستخدمون', icon: <Users className="h-5 w-5" />, roles: ['admin', 'manager'] },
   ]
 
-  const navItems = allNavItems.filter(item => !item.adminOnly || authUser?.role === 'admin')
+  const navItems = allNavItems.filter(item => item.roles.includes(authUser?.role || 'user'))
 
   // ============= RENDER SECTIONS =============
 
@@ -2468,12 +2470,12 @@ export default function ArchiveApp() {
                 {currentPage === 'search' && renderSearch()}
                 {currentPage === 'reports' && renderReports()}
                 {currentPage === 'departments' && renderDepartments()}
-                {currentPage === 'users' && authUser?.role === 'admin' && renderUsers()}
-                {currentPage === 'users' && authUser?.role !== 'admin' && (
+                {currentPage === 'users' && (authUser?.role === 'admin' || authUser?.role === 'manager') && renderUsers()}
+                {currentPage === 'users' && authUser?.role === 'user' && (
                   <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                     <Shield className="h-12 w-12 mb-3" />
                     <p className="text-lg font-medium">غير مصرح</p>
-                    <p className="text-sm">هذه الصفحة متاحة فقط لمدير النظام</p>
+                    <p className="text-sm">هذه الصفحة متاحة فقط لمدير النظام والمشرف</p>
                     <Button variant="outline" className="mt-4" onClick={() => setCurrentPage('dashboard')}>العودة للوحة التحكم</Button>
                   </div>
                 )}
