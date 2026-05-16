@@ -10,7 +10,7 @@ import {
   Tag, Shield, BookOpen, Settings, Bell, LogOut, RefreshCw,
   ChevronLeft, ChevronRight, Hash, UserCircle, Mail, Phone,
   Building, ClipboardList, AlertCircle, FileCheck, FileX,
-  FileClock, Lock, Globe, Layers, Upload, ScanLine, Gavel,
+  FileClock, Lock, Globe, Layers, Upload, Gavel,
   Image, Download, CalendarDays
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -621,60 +621,7 @@ export default function ArchiveApp() {
     }
   }
 
-  // Scan from scanner - opens a file picker with camera/scanner capture on supported browsers
-  const handleScanFromScanner = () => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    // On some browsers/devices, this opens the scanner or camera
-    input.capture = 'environment'
-    input.onchange = (e) => {
-      const target = e.target as HTMLInputElement
-      const file = target.files?.[0]
-      if (file) {
-        setCommitteeOrderCopy(file)
-        toast({ title: `تم التقاط الصورة: ${file.name}` })
-      }
-    }
-    input.click()
-  }
 
-  // Trigger scanner from user's computer using WIA (Windows Image Acquisition)
-  const handleOpenWindowsScanner = async () => {
-    try {
-      // First try Windows Fax and Scan (built-in on all Windows versions)
-      // wfs: protocol opens Windows Fax and Scan which supports WIA scanners
-      const wfsOpened = window.open('wfs:', '_self')
-      if (wfsOpened) {
-        toast({ title: 'تم فتح برنامج المسح الضوئي. امسح المستند ثم ارفع الصورة عبر زر رفع صورة.' })
-        return
-      }
-    } catch {
-      // wfs: protocol not supported, try alternative
-    }
-
-    try {
-      // Try Windows Scan app (Windows 10/11 Store app)
-      window.open('microsoft.windows.scan:', '_self')
-      toast({ title: 'تم فتح تطبيق المسح الضوئي. امسح المستند ثم ارفع الصورة عبر زر رفع صورة.' })
-    } catch {
-      // Last fallback: open file picker so user can select a previously scanned file
-      toast({ title: 'تعذر فتح الماسح الضوئي تلقائياً. يرجى مسح المستند من برنامج السكنر ثم رفعه.', variant: 'destructive' })
-      // Auto-open file picker as fallback
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = 'image/*,.pdf'
-      input.onchange = (e) => {
-        const target = e.target as HTMLInputElement
-        const file = target.files?.[0]
-        if (file) {
-          setCommitteeOrderCopy(file)
-          toast({ title: `تم اختيار الملف: ${file.name}` })
-        }
-      }
-      input.click()
-    }
-  }
 
   useEffect(() => {
     const init = async () => {
@@ -1690,36 +1637,31 @@ export default function ArchiveApp() {
             <div className="space-y-2">
               <Label>نسخة من الأمر الإداري</Label>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={() => {
-                    const input = document.createElement('input')
-                    input.type = 'file'
-                    input.accept = 'image/*,.pdf'
-                    input.onchange = (e) => {
-                      const target = e.target as HTMLInputElement
-                      const file = target.files?.[0]
+                <label className="flex-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 cursor-pointer"
+                    asChild
+                  >
+                    <span>
+                      <Upload className="h-4 w-4" />
+                      إضافة صورة المستند
+                    </span>
+                  </Button>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
                       if (file) {
                         setCommitteeOrderCopy(file)
+                        toast({ title: `تم اختيار الملف: ${file.name}` })
                       }
-                    }
-                    input.click()
-                  }}
-                >
-                  <Upload className="h-4 w-4" />
-                  رفع صورة
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 gap-2"
-                  onClick={handleOpenWindowsScanner}
-                >
-                  <ScanLine className="h-4 w-4" />
-                  سحب من السكنر
-                </Button>
+                    }}
+                    className="hidden"
+                  />
+                </label>
               </div>
               {committeeOrderCopy && (
                 <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
