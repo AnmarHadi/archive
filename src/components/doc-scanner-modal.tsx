@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Upload, Crop, RotateCcw, Loader2 } from 'lucide-react'
+import { Upload, Crop, RotateCcw, Loader2, ScanLine } from 'lucide-react'
 
 const HANDLE_R = 14
 
@@ -71,6 +71,12 @@ interface DocScannerModalProps {
   onClose: () => void
   onConfirm: (result: { blob: Blob; url: string }) => void
   title?: string
+  /** Optional: Pre-loaded image URL from scanner (base64 data URL or blob URL) */
+  initialImageUrl?: string | null
+  /** Optional: Callback to trigger TWAIN/WIA scan from parent */
+  onScanFromScanner?: () => void
+  /** Optional: Whether scan is in progress */
+  scanning?: boolean
 }
 
 export default function DocScannerModal({
@@ -78,11 +84,15 @@ export default function DocScannerModal({
   onClose,
   onConfirm,
   title = 'ماسح المستندات',
+  initialImageUrl,
+  onScanFromScanner,
+  scanning = false,
 }: DocScannerModalProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const pendingRef = useRef<{ w: number; h: number } | null>(null)
+  const initialImageApplied = useRef(false)
 
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready'>('idle')
   const [corners, setCorners] = useState<Point[] | null>(null)
@@ -103,9 +113,43 @@ export default function DocScannerModal({
       setCropping(false)
       imgRef.current = null
       pendingRef.current = null
+      initialImageApplied.current = false
       if (fileRef.current) fileRef.current.value = ''
     }
   }, [open])
+
+  // Load initial image from scanner when provided
+  useEffect(() => {
+    if (!open || !initialImageUrl || initialImageApplied.current) return
+    initialImageApplied.current = true
+    loadImageFromUrl(initialImageUrl)
+  }, [open, initialImageUrl])
+
+  const loadImageFromUrl = useCallback((url: string) => {
+    setStatus('loading')
+    setCorners(null)
+
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
+
+    img.onload = () => {
+      const maxW = Math.min(window.innerWidth * 0.82, 700)
+      const maxH = Math.min(window.innerHeight * 0.55, 480)
+      const s = Math.min(maxW / img.width, maxH / img.height, 1)
+      const w = Math.round(img.width * s)
+      const h = Math.round(img.height * s)
+
+      imgRef.current = img
+      pendingRef.current = { w, h }
+      setStatus('ready')
+    }
+
+    img.onerror = () => {
+      setStatus('idle')
+    }
+
+    img.src = url
+  }, [])
 
   const draw = useCallback((img: HTMLImageElement, crns: Point[] | null) => {
     const canvas = canvasRef.current
@@ -341,7 +385,6 @@ export default function DocScannerModal({
 
     setCropping(true)
 
-    // Use requestAnimationFrame to allow the UI to update before heavy computation
     requestAnimationFrame(() => {
       try {
         const cv = window.cv
@@ -411,6 +454,7 @@ export default function DocScannerModal({
     setCorners(null)
     imgRef.current = null
     pendingRef.current = null
+    initialImageApplied.current = false
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -424,20 +468,52 @@ export default function DocScannerModal({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Idle state - drop zone */}
-        {status === 'idle' && (
-          <div
-            className="border-2 border-dashed border-muted-foreground/30 rounded-xl p-10 text-center cursor-pointer hover:border-primary/50 hover:bg-accent/30 transition-colors"
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-            <p className="font-semibold mb-1">اضغط لاختيار صورة المستند</p>
-            <p className="text-xs text-muted-foreground">JPG, PNG — الحد الأقصى 10MB</p>
-            {!cvLoaded && (
-              <p className="text-xs text-amber-500 mt-2 flex items-center justify-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                جاري تحميل محرك التشذيب...
-              </p>
+        {/* Scanning in progress */}
+        {scanning && status === 'idle' && (
+          <div className="flex flex-col items-center justify-center min-h-[200px] gap-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="text-base font-medium">جاري المسح الضوئي من السكنر...</p>
+            <p className="text-sm text-muted-foreground">يرجى الانتظار حتى يتم المسح</p>
+          </div>
+        )}
+
+        {/* Idle state - drop zone + scanner button */}
+        {status === 'idle' && !scanning && (
+          <div className="space-y-4">
+            <div
+              className="border-2 border-dashed border-muted-foreground/30 rounded-xl p-10 text-center cursor-pointer hover:border-primary/50 hover:bg-accent/30 transition-colors"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="font-semibold mb-1">اضغط لاختيار صورة المستند</p>
+              <p className="text-xs text-muted-foreground">JPG, PNG — الحد الأقصى 10MB</p>
+              {!cvLoaded && (
+                <p className="text-xs text-amber-500 mt-2 flex items-center justify-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  جاري تحميل محرك التشذيب...
+                </p>
+              )}
+            </div>
+
+            {/* TWAIN/WIA Scanner Button */}
+            {onScanFromScanner && (
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">أو</span>
+                </div>
+              </div>
+            )}
+            {onScanFromScanner && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full gap-2 h-12 text-base"
+                onClick={onScanFromScanner}
+              >
+                <ScanLine className="h-5 w-5" />
+                سحب من السكنر (TWAIN/WIA)
+              </Button>
             )}
           </div>
         )}
@@ -506,7 +582,7 @@ export default function DocScannerModal({
           </Button>
 
           <div className="flex gap-2">
-            {status === 'idle' && (
+            {status === 'idle' && !scanning && (
               <Button
                 type="button"
                 onClick={() => fileRef.current?.click()}

@@ -284,6 +284,8 @@ export default function ArchiveApp() {
   const [addCommitteeSubmitting, setAddCommitteeSubmitting] = useState(false)
   const [viewCommitteeImage, setViewCommitteeImage] = useState<string | null>(null)
   const [showScannerModal, setShowScannerModal] = useState(false)
+  const [scanningFromTwain, setScanningFromTwain] = useState(false)
+  const [scannedImageUrl, setScannedImageUrl] = useState<string | null>(null)
 
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -615,7 +617,42 @@ export default function ArchiveApp() {
     setCommitteeOrderCopy(file)
     setCommitteeOrderCopyUrl(result.url)
     setShowScannerModal(false)
+    setScannedImageUrl(null)
     toast({ title: 'تم تشذيب المستند بنجاح' })
+  }
+
+  // Handle TWAIN/WIA scan from scanner
+  const handleScanFromTwain = async () => {
+    setScanningFromTwain(true)
+    try {
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'dialog' }),
+      })
+      const data = await res.json()
+
+      if (data.cancelled) {
+        toast({ title: 'تم إلغاء المسح الضوئي' })
+        setScanningFromTwain(false)
+        return
+      }
+
+      if (data.error) {
+        toast({ title: data.error, variant: 'destructive' })
+        setScanningFromTwain(false)
+        return
+      }
+
+      if (data.success && data.image) {
+        // Set the scanned image as initial image for the DocScannerModal
+        setScannedImageUrl(data.image)
+        toast({ title: 'تم المسح الضوئي بنجاح. يمكنك الآن تشذيب المستند.' })
+      }
+    } catch {
+      toast({ title: 'تعذر الاتصال بالسكنر. تأكد من تشغيل السكنر وتثبيت التعريفات.', variant: 'destructive' })
+    }
+    setScanningFromTwain(false)
   }
 
   // Delete committee
@@ -1756,9 +1793,15 @@ export default function ArchiveApp() {
       {/* Doc Scanner Modal */}
       <DocScannerModal
         open={showScannerModal}
-        onClose={() => setShowScannerModal(false)}
+        onClose={() => {
+          setShowScannerModal(false)
+          setScannedImageUrl(null)
+        }}
         onConfirm={handleScannerConfirm}
         title="ماسح المستندات - نسخة الأمر الإداري"
+        initialImageUrl={scannedImageUrl}
+        onScanFromScanner={handleScanFromTwain}
+        scanning={scanningFromTwain}
       />
     </div>
   )
