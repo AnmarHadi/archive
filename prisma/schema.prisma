@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  password    String
+  role        String   @default("user") // admin, manager, user
+  department  String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+  manager     String?
+  phone       String?
+  email       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Correspondence {
+  id              String   @id @default(cuid())
+  referenceNumber String   @unique // رقم المرجع
+  subject         String   // الموضوع
+  type            String   // incoming, outgoing
+  category        String   // letter, memo, circular, decision, report, contract
+  priority        String   @default("normal") // urgent, high, normal, low
+  status          String   @default("pending") // pending, in_review, approved, rejected, archived, returned
+  senderName      String?  // اسم المرسل
+  senderDept      String?  // قسم المرسل
+  recipientName   String?  // اسم المستلم
+  recipientDept   String?  // قسم المستلم
+  dateReceived    DateTime? // تاريخ الوارد
+  dateSent        DateTime? // تاريخ الصادر
+  dueDate         DateTime? // تاريخ الاستحقاق
+  description     String?  // الوصف/الملاحظات
+  confidentiality String   @default("public") // public, internal, confidential, secret
+  tags            String?  // comma separated tags
+  archivedAt      DateTime?
+  archivedBy      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  logs     CorrespondenceLog[]
+  attachments Attachment[]
+}
+
+model CorrespondenceLog {
+  id              String   @id @default(cuid())
+  correspondenceId String
+  action          String   // created, forwarded, approved, rejected, archived, returned, commented
+  fromStatus      String?
+  toStatus        String?
+  fromUser        String?
+  toUser          String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  correspondence Correspondence @relation(fields: [correspondenceId], references: [id], onDelete: Cascade)
+}
+
+model Attachment {
+  id              String   @id @default(cuid())
+  correspondenceId String
+  fileName        String
+  fileType        String
+  fileSize        Int
+  filePath        String
+  uploadedAt      DateTime @default(now())
+
+  correspondence Correspondence @relation(fields: [correspondenceId], references: [id], onDelete: Cascade)
+}
