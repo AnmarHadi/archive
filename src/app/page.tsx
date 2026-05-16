@@ -10,7 +10,7 @@ import {
   Tag, Shield, BookOpen, Settings, Bell, LogOut, RefreshCw,
   ChevronLeft, ChevronRight, Hash, UserCircle, Mail, Phone,
   Building, ClipboardList, AlertCircle, FileCheck, FileX,
-  FileClock, Lock, Globe, Layers, Upload, Scanner, Gavel,
+  FileClock, Lock, Globe, Layers, Upload, ScanLine, Gavel,
   Image, Download, CalendarDays
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -1691,7 +1691,7 @@ export default function ArchiveApp() {
                   className="flex-1 gap-2"
                   onClick={handleOpenWindowsScanner}
                 >
-                  <Scanner className="h-4 w-4" />
+                  <ScanLine className="h-4 w-4" />
                   سحب من السكنر
                 </Button>
               </div>
