@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 
 export async function POST() {
   try {
@@ -21,21 +22,26 @@ export async function POST() {
       })
     }
 
-    // Seed users
+    // Seed users with hashed passwords (all passwords are: 123456)
+    const hashedPassword = await bcrypt.hash('123456', 12)
     const users = [
-      { name: 'أحمد محمد', email: 'ahmed@example.com', password: 'hashed_password_1', role: 'admin', department: 'الإدارة العامة', isActive: true },
-      { name: 'خالد علي', email: 'khaled@example.com', password: 'hashed_password_2', role: 'manager', department: 'الشؤون المالية', isActive: true },
-      { name: 'فاطمة حسن', email: 'fatima@example.com', password: 'hashed_password_3', role: 'user', department: 'الموارد البشرية', isActive: true },
-      { name: 'عمر يوسف', email: 'omar@example.com', password: 'hashed_password_4', role: 'user', department: 'الشؤون القانونية', isActive: true },
-      { name: 'سارة أحمد', email: 'sara@example.com', password: 'hashed_password_5', role: 'manager', department: 'تقنية المعلومات', isActive: true },
+      { name: 'أحمد محمد', email: 'ahmed@example.com', password: hashedPassword, role: 'admin', department: 'الإدارة العامة', isActive: true },
+      { name: 'خالد علي', email: 'khaled@example.com', password: hashedPassword, role: 'manager', department: 'الشؤون المالية', isActive: true },
+      { name: 'فاطمة حسن', email: 'fatima@example.com', password: hashedPassword, role: 'user', department: 'الموارد البشرية', isActive: true },
+      { name: 'عمر يوسف', email: 'omar@example.com', password: hashedPassword, role: 'user', department: 'الشؤون القانونية', isActive: true },
+      { name: 'سارة أحمد', email: 'sara@example.com', password: hashedPassword, role: 'manager', department: 'تقنية المعلومات', isActive: true },
     ]
 
     for (const user of users) {
-      await db.user.upsert({
-        where: { email: user.email },
-        update: user,
-        create: user,
-      })
+      const existing = await db.user.findUnique({ where: { email: user.email } })
+      if (existing) {
+        await db.user.update({
+          where: { email: user.email },
+          data: { password: hashedPassword, isActive: true },
+        })
+      } else {
+        await db.user.create({ data: user })
+      }
     }
 
     // Seed sample correspondence

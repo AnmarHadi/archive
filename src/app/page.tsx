@@ -212,7 +212,30 @@ const formatDate = (dateStr: string | null) => {
 // Navigation types
 type PageType = 'dashboard' | 'incoming' | 'outgoing' | 'search' | 'reports' | 'departments' | 'users'
 
+// Auth types
+interface AuthUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  department: string | null
+  isActive: boolean
+}
+
 export default function ArchiveApp() {
+  // Auth state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [showLogin, setShowLogin] = useState(true) // true = login, false = register
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [registerName, setRegisterName] = useState('')
+  const [registerEmail, setRegisterEmail] = useState('')
+  const [registerPassword, setRegisterPassword] = useState('')
+  const [registerDept, setRegisterDept] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
+
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [stats, setStats] = useState<Stats | null>(null)
@@ -300,6 +323,83 @@ export default function ArchiveApp() {
       console.error('Error fetching users:', error)
     }
   }, [])
+
+  // Check session on mount
+  useEffect(() => {
+    const checkSession = () => {
+      try {
+        const stored = localStorage.getItem('archive_user')
+        if (stored) {
+          const user = JSON.parse(stored)
+          setAuthUser(user)
+        }
+      } catch (e) {
+        localStorage.removeItem('archive_user')
+      }
+      setAuthLoading(false)
+    }
+    checkSession()
+  }, [])
+
+  // Auth handlers
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthError('')
+    setAuthSubmitting(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAuthUser(data.user)
+        localStorage.setItem('archive_user', JSON.stringify(data.user))
+        toast({ title: `مرحباً ${data.user.name}` })
+      } else {
+        setAuthError(data.error || 'حدث خطأ')
+      }
+    } catch {
+      setAuthError('حدث خطأ في الاتصال')
+    }
+    setAuthSubmitting(false)
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAuthError('')
+    setAuthSubmitting(true)
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: registerName,
+          email: registerEmail,
+          password: registerPassword,
+          department: registerDept,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setAuthUser(data.user)
+        localStorage.setItem('archive_user', JSON.stringify(data.user))
+        toast({ title: `مرحباً ${data.user.name}، تم إنشاء حسابك بنجاح` })
+      } else {
+        setAuthError(data.error || 'حدث خطأ')
+      }
+    } catch {
+      setAuthError('حدث خطأ في الاتصال')
+    }
+    setAuthSubmitting(false)
+  }
+
+  const handleLogout = () => {
+    setAuthUser(null)
+    localStorage.removeItem('archive_user')
+    toast({ title: 'تم تسجيل الخروج بنجاح' })
+  }
 
   const seedData = useCallback(async () => {
     try {
@@ -1713,6 +1813,178 @@ export default function ArchiveApp() {
   )
 
   // ============= MAIN RENDER =============
+
+  // Auth Loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" dir="rtl">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">جاري التحقق...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Login / Register Screen
+  if (!authUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4" dir="rtl">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="shadow-xl border-0">
+            <CardHeader className="text-center pb-4">
+              <div className="flex justify-center mb-4">
+                <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
+                  <Archive className="h-8 w-8 text-primary-foreground" />
+                </div>
+              </div>
+              <CardTitle className="text-2xl">
+                {showLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+              </CardTitle>
+              <CardDescription>
+                {showLogin
+                  ? 'أدخل بيانات حسابك للوصول إلى نظام الأرشفة'
+                  : 'أنشئ حساباً جديداً للبدء باستخدام النظام'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {authError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {authError}
+                </div>
+              )}
+
+              {showLogin ? (
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">البريد الإلكتروني</Label>
+                    <div className="relative">
+                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="ahmed@example.com"
+                        className="pr-10"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">كلمة المرور</Label>
+                    <div className="relative">
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••"
+                        className="pr-10"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={authSubmitting}>
+                    {authSubmitting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                    ) : (
+                      <LogOut className="h-4 w-4 ml-2 rotate-180" />
+                    )}
+                    تسجيل الدخول
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleRegister} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>الاسم الكامل</Label>
+                    <Input
+                      placeholder="أحمد محمد"
+                      value={registerName}
+                      onChange={(e) => setRegisterName(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>البريد الإلكتروني</Label>
+                    <Input
+                      type="email"
+                      placeholder="ahmed@example.com"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>كلمة المرور</Label>
+                    <Input
+                      type="password"
+                      placeholder="6 أحرف على الأقل"
+                      value={registerPassword}
+                      onChange={(e) => setRegisterPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>القسم (اختياري)</Label>
+                    <Select value={registerDept} onValueChange={setRegisterDept}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر القسم" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={authSubmitting}>
+                    {authSubmitting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                    ) : (
+                      <Plus className="h-4 w-4 ml-2" />
+                    )}
+                    إنشاء الحساب
+                  </Button>
+                </form>
+              )}
+
+              <div className="mt-6 pt-4 border-t text-center">
+                <p className="text-sm text-muted-foreground">
+                  {showLogin ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'}
+                  <button
+                    onClick={() => { setShowLogin(!showLogin); setAuthError('') }}
+                    className="text-primary font-medium hover:underline mr-1"
+                  >
+                    {showLogin ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}
+                  </button>
+                </p>
+              </div>
+
+              {showLogin && (
+                <div className="mt-4 p-3 rounded-lg bg-muted text-xs text-muted-foreground">
+                  <p className="font-medium mb-1">حسابات تجريبية (كلمة المرور: 123456)</p>
+                  <p>ahmed@example.com - مدير النظام</p>
+                  <p>khaled@example.com - مشرف</p>
+                  <p>fatima@example.com - مستخدم</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    )
+  }
+
+  // Main App (Authenticated)
   return (
     <div className="min-h-screen flex bg-background" dir="rtl">
       {/* Sidebar */}
@@ -1760,6 +2032,10 @@ export default function ArchiveApp() {
               <RefreshCw className="h-4 w-4" />
               تهيئة البيانات التجريبية
             </Button>
+            <Button variant="ghost" size="sm" className="w-full gap-2 text-destructive hover:text-destructive" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+              تسجيل الخروج
+            </Button>
           </div>
         )}
       </aside>
@@ -1785,10 +2061,18 @@ export default function ArchiveApp() {
             <Separator orientation="vertical" className="h-6" />
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold">
-                م
+                {authUser.name.charAt(0)}
               </div>
-              <span className="text-sm font-medium hidden sm:block">المدير</span>
+              <div className="hidden sm:block">
+                <span className="text-sm font-medium block leading-tight">{authUser.name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {authUser.role === 'admin' ? 'مدير النظام' : authUser.role === 'manager' ? 'مشرف' : 'مستخدم'}
+                </span>
+              </div>
             </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </header>
 
