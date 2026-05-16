@@ -246,6 +246,16 @@ export default function ArchiveApp() {
   const [newUserDept, setNewUserDept] = useState('')
   const [addUserSubmitting, setAddUserSubmitting] = useState(false)
 
+  // Add department dialog state
+  const [showAddDeptDialog, setShowAddDeptDialog] = useState(false)
+  const [newDeptName, setNewDeptName] = useState('')
+  const [newDeptCode, setNewDeptCode] = useState('')
+  const [newDeptDesc, setNewDeptDesc] = useState('')
+  const [newDeptManager, setNewDeptManager] = useState('')
+  const [newDeptPhone, setNewDeptPhone] = useState('')
+  const [newDeptEmail, setNewDeptEmail] = useState('')
+  const [addDeptSubmitting, setAddDeptSubmitting] = useState(false)
+
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [stats, setStats] = useState<Stats | null>(null)
@@ -432,7 +442,7 @@ export default function ArchiveApp() {
           email: newUserEmail,
           password: newUserPassword,
           role: newUserRole,
-          department: newUserDept,
+          department: newUserDept === 'none' ? '' : newUserDept,
         }),
       })
       const data = await res.json()
@@ -460,18 +470,61 @@ export default function ArchiveApp() {
     toast({ title: 'تم تسجيل الخروج بنجاح' })
   }
 
-  const seedData = useCallback(async () => {
-    try {
-      await fetch('/api/seed', { method: 'POST' })
-      toast({ title: 'تم تهيئة البيانات بنجاح' })
-      fetchStats()
-      fetchCorrespondence()
-      fetchDepartments()
-      fetchUsers()
-    } catch (error) {
-      console.error('Error seeding data:', error)
+  // Create department
+  const handleCreateDepartment = async () => {
+    if (!newDeptName || !newDeptCode) {
+      toast({ title: 'يرجى إدخال اسم القسم والرمز', variant: 'destructive' })
+      return
     }
-  }, [fetchStats, fetchCorrespondence, fetchDepartments, fetchUsers, toast])
+    setAddDeptSubmitting(true)
+    try {
+      const res = await fetch('/api/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newDeptName,
+          code: newDeptCode,
+          description: newDeptDesc || null,
+          manager: newDeptManager || null,
+          phone: newDeptPhone || null,
+          email: newDeptEmail || null,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: 'تم إنشاء القسم بنجاح' })
+        setShowAddDeptDialog(false)
+        setNewDeptName('')
+        setNewDeptCode('')
+        setNewDeptDesc('')
+        setNewDeptManager('')
+        setNewDeptPhone('')
+        setNewDeptEmail('')
+        fetchDepartments()
+      } else {
+        toast({ title: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+    setAddDeptSubmitting(false)
+  }
+
+  // Delete department
+  const handleDeleteDepartment = async (id: string) => {
+    try {
+      const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast({ title: 'تم حذف القسم بنجاح' })
+        fetchDepartments()
+      } else {
+        const data = await res.json()
+        toast({ title: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+  }
 
   useEffect(() => {
     const init = async () => {
@@ -1362,53 +1415,172 @@ export default function ArchiveApp() {
           </h2>
           <p className="text-muted-foreground text-sm mt-1">{departments.length} قسم</p>
         </div>
+        {authUser?.role === 'admin' && (
+          <Button className="gap-2" onClick={() => setShowAddDeptDialog(true)}>
+            <Plus className="h-4 w-4" />
+            إضافة قسم جديد
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {departments.map((dept) => (
-          <Card key={dept.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{dept.name}</CardTitle>
-                    <Badge variant="secondary" className="mt-1">{dept.code}</Badge>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {dept.description && (
-                <p className="text-sm text-muted-foreground">{dept.description}</p>
+      {departments.length === 0 ? (
+        <Card>
+          <CardContent className="py-16">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <Building2 className="h-16 w-16" />
+              <p className="text-lg font-medium">لا توجد أقسام بعد</p>
+              <p className="text-sm">ابدأ بإضافة الأقسام الخاصة بمؤسستك</p>
+              {authUser?.role === 'admin' && (
+                <Button className="gap-2 mt-2" onClick={() => setShowAddDeptDialog(true)}>
+                  <Plus className="h-4 w-4" />
+                  إضافة أول قسم
+                </Button>
               )}
-              <Separator />
-              <div className="space-y-1.5 text-sm">
-                {dept.manager && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <UserCircle className="h-4 w-4" />
-                    <span>{dept.manager}</span>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {departments.map((dept) => (
+            <Card key={dept.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{dept.name}</CardTitle>
+                      <Badge variant="secondary" className="mt-1">{dept.code}</Badge>
+                    </div>
                   </div>
+                  {authUser?.role === 'admin' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteDepartment(dept.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-2">
+                {dept.description && (
+                  <p className="text-sm text-muted-foreground">{dept.description}</p>
                 )}
-                {dept.phone && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Phone className="h-4 w-4" />
-                    <span>{dept.phone}</span>
-                  </div>
-                )}
-                {dept.email && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Mail className="h-4 w-4" />
-                    <span>{dept.email}</span>
-                  </div>
-                )}
+                <Separator />
+                <div className="space-y-1.5 text-sm">
+                  {dept.manager && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <UserCircle className="h-4 w-4" />
+                      <span>{dept.manager}</span>
+                    </div>
+                  )}
+                  {dept.phone && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="h-4 w-4" />
+                      <span>{dept.phone}</span>
+                    </div>
+                  )}
+                  {dept.email && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                      <span>{dept.email}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Add Department Dialog */}
+      <Dialog open={showAddDeptDialog} onOpenChange={setShowAddDeptDialog}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              إضافة قسم جديد
+            </DialogTitle>
+            <DialogDescription>أدخل بيانات القسم الجديد</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>اسم القسم *</Label>
+                <Input
+                  placeholder="مثال: الشؤون المالية"
+                  value={newDeptName}
+                  onChange={(e) => setNewDeptName(e.target.value)}
+                />
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              <div className="space-y-2">
+                <Label>الرمز *</Label>
+                <Input
+                  placeholder="مثال: FIN"
+                  value={newDeptCode}
+                  onChange={(e) => setNewDeptCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>الوصف</Label>
+              <Textarea
+                placeholder="وصف مختصر للقسم"
+                value={newDeptDesc}
+                onChange={(e) => setNewDeptDesc(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>المسؤول</Label>
+              <Input
+                placeholder="اسم مسؤول القسم"
+                value={newDeptManager}
+                onChange={(e) => setNewDeptManager(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>الهاتف</Label>
+                <Input
+                  placeholder="01-2345678"
+                  value={newDeptPhone}
+                  onChange={(e) => setNewDeptPhone(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>البريد الإلكتروني</Label>
+                <Input
+                  type="email"
+                  placeholder="dept@example.com"
+                  value={newDeptEmail}
+                  onChange={(e) => setNewDeptEmail(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Button
+                onClick={handleCreateDepartment}
+                disabled={!newDeptName || !newDeptCode || addDeptSubmitting}
+              >
+                {addDeptSubmitting ? (
+                  <RefreshCw className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Plus className="h-4 w-4 ml-1" />
+                )}
+                إنشاء القسم
+              </Button>
+              <Button variant="outline" onClick={() => setShowAddDeptDialog(false)}>
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 
@@ -1528,11 +1700,27 @@ export default function ArchiveApp() {
             </div>
             <div className="space-y-2">
               <Label>القسم (اختياري)</Label>
-              <Input
-                placeholder="أدخل اسم القسم"
-                value={newUserDept}
-                onChange={(e) => setNewUserDept(e.target.value)}
-              />
+              {departments.length > 0 ? (
+                <Select value={newUserDept} onValueChange={setNewUserDept}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر القسم" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">بدون قسم</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="أدخل اسم القسم"
+                  value={newUserDept}
+                  onChange={(e) => setNewUserDept(e.target.value)}
+                />
+              )}
             </div>
             <div className="flex items-center gap-2 pt-2">
               <Button
