@@ -1528,16 +1528,11 @@ export default function ArchiveApp() {
             </div>
             <div className="space-y-2">
               <Label>القسم (اختياري)</Label>
-              <Select value={newUserDept} onValueChange={setNewUserDept}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر القسم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((d) => (
-                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                placeholder="أدخل اسم القسم"
+                value={newUserDept}
+                onChange={(e) => setNewUserDept(e.target.value)}
+              />
             </div>
             <div className="flex items-center gap-2 pt-2">
               <Button
@@ -1863,16 +1858,11 @@ export default function ArchiveApp() {
             </div>
             <div className="space-y-2">
               <Label>قسم المرسل</Label>
-              <Select value={formData.senderDept} onValueChange={(v) => setFormData({ ...formData, senderDept: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر القسم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((d) => (
-                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                placeholder="أدخل اسم القسم"
+                value={formData.senderDept}
+                onChange={(e) => setFormData({ ...formData, senderDept: e.target.value })}
+              />
             </div>
           </div>
 
@@ -1887,16 +1877,11 @@ export default function ArchiveApp() {
             </div>
             <div className="space-y-2">
               <Label>قسم المستلم</Label>
-              <Select value={formData.recipientDept} onValueChange={(v) => setFormData({ ...formData, recipientDept: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر القسم" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((d) => (
-                    <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                placeholder="أدخل اسم القسم"
+                value={formData.recipientDept}
+                onChange={(e) => setFormData({ ...formData, recipientDept: e.target.value })}
+              />
             </div>
           </div>
 
@@ -2063,16 +2048,11 @@ export default function ArchiveApp() {
                 </div>
                 <div className="space-y-2">
                   <Label>القسم (اختياري)</Label>
-                  <Select value={setupDept} onValueChange={setSetupDept}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر القسم" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    placeholder="أدخل اسم القسم"
+                    value={setupDept}
+                    onChange={(e) => setSetupDept(e.target.value)}
+                  />
                 </div>
                 <Button type="submit" className="w-full bg-gradient-to-l from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white" disabled={authSubmitting}>
                   {authSubmitting ? (
@@ -2232,10 +2212,6 @@ export default function ArchiveApp() {
         {/* Bottom Actions */}
         {sidebarOpen && (
           <div className="p-4 border-t space-y-2">
-            <Button variant="outline" size="sm" className="w-full gap-2" onClick={seedData}>
-              <RefreshCw className="h-4 w-4" />
-              تهيئة البيانات التجريبية
-            </Button>
             <Button variant="ghost" size="sm" className="w-full gap-2 text-destructive hover:text-destructive" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
               تسجيل الخروج
