@@ -1650,42 +1650,18 @@ export default function ArchiveApp() {
             <div className="space-y-2">
               <Label>نسخة من الأمر الإداري</Label>
               <div className="flex gap-2">
-                <label className="flex-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full gap-2 cursor-pointer"
-                    asChild
-                  >
-                    <span>
-                      <Upload className="h-4 w-4" />
-                      رفع صورة
-                    </span>
-                  </Button>
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        setCommitteeOrderCopy(file)
-                        setCommitteeOrderCopyUrl(null)
-                        toast({ title: `تم اختيار الملف: ${file.name}` })
-                      }
-                    }}
-                    className="hidden"
-                  />
-                </label>
                 <Button
                   type="button"
-                  variant="outline"
                   className="flex-1 gap-2"
                   onClick={() => setShowScannerModal(true)}
                 >
                   <Image className="h-4 w-4" />
-                  ماسح المستندات
+                  إضافة صورة المستند
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                اضغط الزر لاختيار صورة من جهازك — سيتم كشف حواف الوثيقة وتشذيبها تلقائياً
+              </p>
               {committeeOrderCopy && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
