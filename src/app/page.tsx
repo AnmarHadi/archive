@@ -14,6 +14,7 @@ import {
   Image, Download, CalendarDays
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import DocScannerModal from '@/components/doc-scanner-modal'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -278,9 +279,11 @@ export default function ArchiveApp() {
   const [committeeOrderNo, setCommitteeOrderNo] = useState('')
   const [committeeOrderDate, setCommitteeOrderDate] = useState('')
   const [committeeOrderCopy, setCommitteeOrderCopy] = useState<File | null>(null)
+  const [committeeOrderCopyUrl, setCommitteeOrderCopyUrl] = useState<string | null>(null)
   const [committeeNotes, setCommitteeNotes] = useState('')
   const [addCommitteeSubmitting, setAddCommitteeSubmitting] = useState(false)
   const [viewCommitteeImage, setViewCommitteeImage] = useState<string | null>(null)
+  const [showScannerModal, setShowScannerModal] = useState(false)
 
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -594,6 +597,7 @@ export default function ArchiveApp() {
         setCommitteeOrderNo('')
         setCommitteeOrderDate('')
         setCommitteeOrderCopy(null)
+        setCommitteeOrderCopyUrl(null)
         setCommitteeNotes('')
         fetchCommittees()
       } else {
@@ -603,6 +607,15 @@ export default function ArchiveApp() {
       toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
     }
     setAddCommitteeSubmitting(false)
+  }
+
+  // Handle scanner result - convert blob to File and store preview URL
+  const handleScannerConfirm = (result: { blob: Blob; url: string }) => {
+    const file = new File([result.blob], 'scanned-document.jpg', { type: 'image/jpeg' })
+    setCommitteeOrderCopy(file)
+    setCommitteeOrderCopyUrl(result.url)
+    setShowScannerModal(false)
+    toast({ title: 'تم تشذيب المستند بنجاح' })
   }
 
   // Delete committee
@@ -1646,7 +1659,7 @@ export default function ArchiveApp() {
                   >
                     <span>
                       <Upload className="h-4 w-4" />
-                      إضافة صورة المستند
+                      رفع صورة
                     </span>
                   </Button>
                   <input
@@ -1656,26 +1669,51 @@ export default function ArchiveApp() {
                       const file = e.target.files?.[0]
                       if (file) {
                         setCommitteeOrderCopy(file)
+                        setCommitteeOrderCopyUrl(null)
                         toast({ title: `تم اختيار الملف: ${file.name}` })
                       }
                     }}
                     className="hidden"
                   />
                 </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => setShowScannerModal(true)}
+                >
+                  <Image className="h-4 w-4" />
+                  ماسح المستندات
+                </Button>
               </div>
               {committeeOrderCopy && (
-                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
-                  <Image className="h-4 w-4" />
-                  <span className="truncate">{committeeOrderCopy.name}</span>
-                  <span className="text-xs text-green-600">({(committeeOrderCopy.size / 1024).toFixed(1)} ك.ب)</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 mr-auto"
-                    onClick={() => setCommitteeOrderCopy(null)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
+                    <Image className="h-4 w-4" />
+                    <span className="truncate">{committeeOrderCopy.name}</span>
+                    <span className="text-xs text-green-600">({(committeeOrderCopy.size / 1024).toFixed(1)} ك.ب)</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 mr-auto"
+                      onClick={() => {
+                        setCommitteeOrderCopy(null)
+                        setCommitteeOrderCopyUrl(null)
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {/* Preview scanned/cropped image */}
+                  {(committeeOrderCopyUrl || (committeeOrderCopy && committeeOrderCopy.type?.startsWith('image/'))) && (
+                    <div className="relative rounded-lg overflow-hidden border bg-white">
+                      <img
+                        src={committeeOrderCopyUrl || (committeeOrderCopy ? URL.createObjectURL(committeeOrderCopy) : '')}
+                        alt="معاينة المستند"
+                        className="w-full max-h-48 object-contain"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1738,6 +1776,14 @@ export default function ArchiveApp() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Doc Scanner Modal */}
+      <DocScannerModal
+        open={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onConfirm={handleScannerConfirm}
+        title="ماسح المستندات - نسخة الأمر الإداري"
+      />
     </div>
   )
 
