@@ -10,7 +10,8 @@ import {
   Tag, Shield, BookOpen, Settings, Bell, LogOut, RefreshCw,
   ChevronLeft, ChevronRight, Hash, UserCircle, Mail, Phone,
   Building, ClipboardList, AlertCircle, FileCheck, FileX,
-  FileClock, Lock, Globe, Layers
+  FileClock, Lock, Globe, Layers, Upload, Scanner, Gavel,
+  Image, Download, CalendarDays
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -109,6 +110,19 @@ interface Stats {
   monthlyData: { month: string; incoming: number; outgoing: number }[]
   statusStats: { status: string; count: number }[]
   priorityStats: { priority: string; count: number }[]
+}
+
+interface InvestigationCommittee {
+  id: string
+  name: string
+  chairmanName: string
+  administrativeOrderNo: string
+  administrativeOrderDate: string | null
+  orderCopyPath: string | null
+  orderCopyFileName: string | null
+  notes: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 // Utility functions
@@ -210,7 +224,7 @@ const formatDate = (dateStr: string | null) => {
 }
 
 // Navigation types
-type PageType = 'dashboard' | 'incoming' | 'outgoing' | 'search' | 'reports' | 'departments' | 'users'
+type PageType = 'dashboard' | 'incoming' | 'outgoing' | 'search' | 'reports' | 'departments' | 'users' | 'committees'
 
 // Auth types
 interface AuthUser {
@@ -255,6 +269,18 @@ export default function ArchiveApp() {
   const [newDeptPhone, setNewDeptPhone] = useState('')
   const [newDeptEmail, setNewDeptEmail] = useState('')
   const [addDeptSubmitting, setAddDeptSubmitting] = useState(false)
+
+  // Committee dialog state
+  const [committees, setCommittees] = useState<InvestigationCommittee[]>([])
+  const [showAddCommitteeDialog, setShowAddCommitteeDialog] = useState(false)
+  const [committeeName, setCommitteeName] = useState('')
+  const [committeeChairman, setCommitteeChairman] = useState('')
+  const [committeeOrderNo, setCommitteeOrderNo] = useState('')
+  const [committeeOrderDate, setCommitteeOrderDate] = useState('')
+  const [committeeOrderCopy, setCommitteeOrderCopy] = useState<File | null>(null)
+  const [committeeNotes, setCommitteeNotes] = useState('')
+  const [addCommitteeSubmitting, setAddCommitteeSubmitting] = useState(false)
+  const [viewCommitteeImage, setViewCommitteeImage] = useState<string | null>(null)
 
   const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -528,14 +554,110 @@ export default function ArchiveApp() {
     }
   }
 
+  // Fetch committees
+  const fetchCommittees = useCallback(async () => {
+    try {
+      const res = await fetch('/api/committees')
+      const data = await res.json()
+      if (data.data) setCommittees(data.data)
+    } catch (error) {
+      console.error('Error fetching committees:', error)
+    }
+  }, [])
+
+  // Create committee
+  const handleCreateCommittee = async () => {
+    if (!committeeName || !committeeChairman || !committeeOrderNo) {
+      toast({ title: 'يرجى إدخال اسم اللجنة واسم الرئيس ورقم الأمر الإداري', variant: 'destructive' })
+      return
+    }
+    setAddCommitteeSubmitting(true)
+    try {
+      const formData = new FormData()
+      formData.append('name', committeeName)
+      formData.append('chairmanName', committeeChairman)
+      formData.append('administrativeOrderNo', committeeOrderNo)
+      if (committeeOrderDate) formData.append('administrativeOrderDate', committeeOrderDate)
+      if (committeeOrderCopy) formData.append('orderCopy', committeeOrderCopy)
+      if (committeeNotes) formData.append('notes', committeeNotes)
+
+      const res = await fetch('/api/committees', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast({ title: 'تم إنشاء لجنة التحقيق بنجاح' })
+        setShowAddCommitteeDialog(false)
+        setCommitteeName('')
+        setCommitteeChairman('')
+        setCommitteeOrderNo('')
+        setCommitteeOrderDate('')
+        setCommitteeOrderCopy(null)
+        setCommitteeNotes('')
+        fetchCommittees()
+      } else {
+        toast({ title: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+    setAddCommitteeSubmitting(false)
+  }
+
+  // Delete committee
+  const handleDeleteCommittee = async (id: string) => {
+    try {
+      const res = await fetch(`/api/committees/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast({ title: 'تم حذف لجنة التحقيق بنجاح' })
+        fetchCommittees()
+      } else {
+        const data = await res.json()
+        toast({ title: data.error || 'حدث خطأ', variant: 'destructive' })
+      }
+    } catch {
+      toast({ title: 'حدث خطأ في الاتصال', variant: 'destructive' })
+    }
+  }
+
+  // Scan from scanner - opens a file picker with camera/scanner capture on supported browsers
+  const handleScanFromScanner = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    // On some browsers/devices, this opens the scanner or camera
+    input.capture = 'environment'
+    input.onchange = (e) => {
+      const target = e.target as HTMLInputElement
+      const file = target.files?.[0]
+      if (file) {
+        setCommitteeOrderCopy(file)
+        toast({ title: `تم التقاط الصورة: ${file.name}` })
+      }
+    }
+    input.click()
+  }
+
+  // Trigger Windows Scan app
+  const handleOpenWindowsScanner = async () => {
+    try {
+      // Try to open Windows Fax and Scan
+      window.open('ms-windows-store://pdp/?productid=9wzdncrfj3pv', '_blank')
+      toast({ title: 'يتم فتح تطبيق المسح الضوئي. يرجى مسح المستند ثم رفع الصورة.' })
+    } catch {
+      toast({ title: 'تعذر فتح الماسح الضوئي. يرجى مسح المستند يدوياً ثم رفعه.', variant: 'destructive' })
+    }
+  }
+
   useEffect(() => {
     const init = async () => {
       setLoading(true)
-      await Promise.all([fetchStats(), fetchCorrespondence(), fetchDepartments(), fetchUsers()])
+      await Promise.all([fetchStats(), fetchCorrespondence(), fetchDepartments(), fetchUsers(), fetchCommittees()])
       setLoading(false)
     }
     init()
-  }, [fetchStats, fetchCorrespondence, fetchDepartments, fetchUsers])
+  }, [fetchStats, fetchCorrespondence, fetchDepartments, fetchUsers, fetchCommittees])
 
   useEffect(() => {
     const fetchForPage = async () => {
@@ -669,6 +791,7 @@ export default function ArchiveApp() {
     { id: 'outgoing' as PageType, label: 'الصادر', icon: <Send className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
     { id: 'search' as PageType, label: 'البحث المتقدم', icon: <Search className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
     { id: 'reports' as PageType, label: 'التقارير', icon: <BarChart3 className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
+    { id: 'committees' as PageType, label: 'اللجان التحقيقية', icon: <Gavel className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
     { id: 'departments' as PageType, label: 'الأقسام', icon: <Building2 className="h-5 w-5" />, roles: ['admin', 'manager', 'user'] },
     { id: 'users' as PageType, label: 'المستخدمون', icon: <Users className="h-5 w-5" />, roles: ['admin', 'manager'] },
   ]
@@ -1405,6 +1528,250 @@ export default function ArchiveApp() {
       </div>
     )
   }
+
+  // Committees Section
+  const renderCommittees = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Gavel className="h-6 w-6" />
+            اللجان التحقيقية
+          </h2>
+          <p className="text-muted-foreground text-sm mt-1">{committees.length} لجنة</p>
+        </div>
+        <Button className="gap-2" onClick={() => setShowAddCommitteeDialog(true)}>
+          <Plus className="h-4 w-4" />
+          إضافة لجنة تحقيقية جديدة
+        </Button>
+      </div>
+
+      {committees.length === 0 ? (
+        <Card>
+          <CardContent className="p-12">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <Gavel className="h-16 w-16" />
+              <p className="text-lg font-medium">لا توجد لجان تحقيقية</p>
+              <p className="text-sm">اضغط على زر &quot;إضافة لجنة تحقيقية جديدة&quot; لإضافة لجنة</p>
+              <Button className="gap-2 mt-2" onClick={() => setShowAddCommitteeDialog(true)}>
+                <Plus className="h-4 w-4" />
+                إضافة لجنة تحقيقية جديدة
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {committees.map((committee) => (
+            <Card key={committee.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                      <Gavel className="h-5 w-5 text-amber-700" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{committee.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">رئيس اللجنة: {committee.chairmanName}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteCommittee(committee.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">رقم الأمر:</span>
+                  <span className="font-medium">{committee.administrativeOrderNo}</span>
+                </div>
+                {committee.administrativeOrderDate && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">تاريخ الأمر:</span>
+                    <span>{formatDate(committee.administrativeOrderDate)}</span>
+                  </div>
+                )}
+                {committee.orderCopyPath && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 w-full mt-2"
+                    onClick={() => setViewCommitteeImage(committee.orderCopyPath)}
+                  >
+                    <Image className="h-4 w-4" />
+                    عرض نسخة الأمر الإداري
+                  </Button>
+                )}
+                {committee.notes && (
+                  <p className="text-xs text-muted-foreground mt-2 border-t pt-2">{committee.notes}</p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Add Committee Dialog */}
+      <Dialog open={showAddCommitteeDialog} onOpenChange={setShowAddCommitteeDialog}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gavel className="h-5 w-5" />
+              إضافة لجنة تحقيقية جديدة
+            </DialogTitle>
+            <DialogDescription>أدخل بيانات لجنة التحقيق الجديدة</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>اسم اللجنة *</Label>
+              <Input
+                placeholder="لجنة تحقيقية رقم 1"
+                value={committeeName}
+                onChange={(e) => setCommitteeName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>اسم رئيس اللجنة *</Label>
+              <Input
+                placeholder="الاسم الكامل لرئيس اللجنة"
+                value={committeeChairman}
+                onChange={(e) => setCommitteeChairman(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>رقم الأمر الإداري *</Label>
+              <Input
+                placeholder="رقم الأمر الإداري"
+                value={committeeOrderNo}
+                onChange={(e) => setCommitteeOrderNo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>تاريخ الأمر الإداري</Label>
+              <Input
+                type="date"
+                value={committeeOrderDate}
+                onChange={(e) => setCommitteeOrderDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>نسخة من الأمر الإداري</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/*,.pdf'
+                    input.onchange = (e) => {
+                      const target = e.target as HTMLInputElement
+                      const file = target.files?.[0]
+                      if (file) {
+                        setCommitteeOrderCopy(file)
+                      }
+                    }
+                    input.click()
+                  }}
+                >
+                  <Upload className="h-4 w-4" />
+                  رفع صورة
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 gap-2"
+                  onClick={handleOpenWindowsScanner}
+                >
+                  <Scanner className="h-4 w-4" />
+                  سحب من السكنر
+                </Button>
+              </div>
+              {committeeOrderCopy && (
+                <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
+                  <Image className="h-4 w-4" />
+                  <span className="truncate">{committeeOrderCopy.name}</span>
+                  <span className="text-xs text-green-600">({(committeeOrderCopy.size / 1024).toFixed(1)} ك.ب)</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 mr-auto"
+                    onClick={() => setCommitteeOrderCopy(null)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>ملاحظات</Label>
+              <Textarea
+                placeholder="ملاحظات إضافية (اختياري)"
+                value={committeeNotes}
+                onChange={(e) => setCommitteeNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button
+              className="flex-1"
+              onClick={handleCreateCommittee}
+              disabled={!committeeName || !committeeChairman || !committeeOrderNo || addCommitteeSubmitting}
+            >
+              {addCommitteeSubmitting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                  جاري الحفظ...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 ml-1" />
+                  إضافة اللجنة
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={() => setShowAddCommitteeDialog(false)}>
+              إلغاء
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Committee Image Dialog */}
+      <Dialog open={!!viewCommitteeImage} onOpenChange={() => setViewCommitteeImage(null)}>
+        <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>نسخة الأمر الإداري</DialogTitle>
+          </DialogHeader>
+          {viewCommitteeImage && (
+            <div className="flex justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={viewCommitteeImage}
+                alt="نسخة الأمر الإداري"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg border"
+              />
+            </div>
+          )}
+          <div className="flex justify-center pt-2">
+            <Button variant="outline" className="gap-2" onClick={() => setViewCommitteeImage(null)}>
+              <X className="h-4 w-4" />
+              إغلاق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 
   // Departments Section
   const renderDepartments = () => (
@@ -2469,6 +2836,7 @@ export default function ArchiveApp() {
                 {currentPage === 'outgoing' && renderCorrespondenceTable('outgoing')}
                 {currentPage === 'search' && renderSearch()}
                 {currentPage === 'reports' && renderReports()}
+                {currentPage === 'committees' && renderCommittees()}
                 {currentPage === 'departments' && renderDepartments()}
                 {currentPage === 'users' && (authUser?.role === 'admin' || authUser?.role === 'manager') && renderUsers()}
                 {currentPage === 'users' && authUser?.role === 'user' && (
