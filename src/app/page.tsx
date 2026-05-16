@@ -639,14 +639,40 @@ export default function ArchiveApp() {
     input.click()
   }
 
-  // Trigger Windows Scan app
+  // Trigger scanner from user's computer using WIA (Windows Image Acquisition)
   const handleOpenWindowsScanner = async () => {
     try {
-      // Try to open Windows Fax and Scan
-      window.open('ms-windows-store://pdp/?productid=9wzdncrfj3pv', '_blank')
-      toast({ title: 'يتم فتح تطبيق المسح الضوئي. يرجى مسح المستند ثم رفع الصورة.' })
+      // First try Windows Fax and Scan (built-in on all Windows versions)
+      // wfs: protocol opens Windows Fax and Scan which supports WIA scanners
+      const wfsOpened = window.open('wfs:', '_self')
+      if (wfsOpened) {
+        toast({ title: 'تم فتح برنامج المسح الضوئي. امسح المستند ثم ارفع الصورة عبر زر رفع صورة.' })
+        return
+      }
     } catch {
-      toast({ title: 'تعذر فتح الماسح الضوئي. يرجى مسح المستند يدوياً ثم رفعه.', variant: 'destructive' })
+      // wfs: protocol not supported, try alternative
+    }
+
+    try {
+      // Try Windows Scan app (Windows 10/11 Store app)
+      window.open('microsoft.windows.scan:', '_self')
+      toast({ title: 'تم فتح تطبيق المسح الضوئي. امسح المستند ثم ارفع الصورة عبر زر رفع صورة.' })
+    } catch {
+      // Last fallback: open file picker so user can select a previously scanned file
+      toast({ title: 'تعذر فتح الماسح الضوئي تلقائياً. يرجى مسح المستند من برنامج السكنر ثم رفعه.', variant: 'destructive' })
+      // Auto-open file picker as fallback
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = 'image/*,.pdf'
+      input.onchange = (e) => {
+        const target = e.target as HTMLInputElement
+        const file = target.files?.[0]
+        if (file) {
+          setCommitteeOrderCopy(file)
+          toast({ title: `تم اختيار الملف: ${file.name}` })
+        }
+      }
+      input.click()
     }
   }
 
