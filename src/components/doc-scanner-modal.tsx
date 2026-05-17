@@ -576,18 +576,26 @@ export default function DocScannerModal({
               )}
             </div>
 
-            {/* TWAIN/WIA Scanner Section */}
-            {scanners.length > 0 && (
-              <>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">أو المسح من السكنر</span>
-                  </div>
-                </div>
+            {/* TWAIN/WIA Scanner Section - Always visible */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">أو المسح من السكنر</span>
+              </div>
+            </div>
 
-                <div className="space-y-3 p-4 bg-muted/30 rounded-xl border">
-                  {/* Scanner selection */}
+            <div className="space-y-3 p-4 bg-muted/30 rounded-xl border">
+              {/* Scanners loading */}
+              {scannersLoading && !scannersLoaded && (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  جاري البحث عن السكنرات...
+                </div>
+              )}
+
+              {/* Scanners found */}
+              {scanners.length > 0 && (
+                <>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">اختر السكنر</Label>
                     <div className="flex gap-2">
@@ -673,30 +681,30 @@ export default function DocScannerModal({
                   <p className="text-xs text-muted-foreground text-center">
                     سيتم المسح مباشرة من السكنر بدون فتح أي نافذة خارجية
                   </p>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {/* No scanners message with retry */}
-            {scannersLoaded && scanners.length === 0 && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
-                <ScanLine className="h-8 w-8 mx-auto mb-2 text-amber-500" />
-                <p className="text-sm font-medium text-amber-700">لم يتم العثور على سكنر</p>
-                <p className="text-xs text-amber-600 mt-1">
-                  تأكد من تشغيل السكنر وتوصيله بالحاسبة وتثبيت تعريفات WIA
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 gap-2"
-                  onClick={fetchScanners}
-                  disabled={scannersLoading}
-                >
-                  <RefreshCw className={`h-3 w-3 ${scannersLoading ? 'animate-spin' : ''}`} />
-                  إعادة البحث عن السكنر
-                </Button>
-              </div>
-            )}
+              {/* No scanners found */}
+              {scannersLoaded && scanners.length === 0 && (
+                <div className="text-center py-2">
+                  <ScanLine className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+                  <p className="text-sm font-medium text-amber-700">لم يتم العثور على سكنر</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    تأكد من تشغيل السكنر وتوصيله بالحاسبة وتثبيت تعريفات WIA
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 gap-2"
+                    onClick={fetchScanners}
+                    disabled={scannersLoading}
+                  >
+                    <RefreshCw className={`h-3 w-3 ${scannersLoading ? 'animate-spin' : ''}`} />
+                    إعادة البحث عن السكنر
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
