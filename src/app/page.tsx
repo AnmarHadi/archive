@@ -1733,6 +1733,7 @@ export default function ArchiveApp() {
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
             <DialogTitle>نسخة الأمر الإداري</DialogTitle>
+            <DialogDescription className="sr-only">عرض نسخة الأمر الإداري</DialogDescription>
           </DialogHeader>
           {viewCommitteeImage && (
             <div className="flex justify-center">

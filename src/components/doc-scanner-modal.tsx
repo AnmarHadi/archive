@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -11,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Upload, Crop, RotateCcw, Loader2, ScanLine, AlertCircle } from 'lucide-react'
+import { Upload, Crop, RotateCcw, Loader2, ScanLine, AlertCircle, Settings2, RefreshCw } from 'lucide-react'
 
 const HANDLE_R = 14
 
@@ -103,6 +104,12 @@ export default function DocScannerModal({
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
   const [scannersLoaded, setScannersLoaded] = useState(false)
+  const [scannersLoading, setScannersLoading] = useState(false)
+
+  // Scanner settings
+  const [scanResolution, setScanResolution] = useState<string>('200')
+  const [scanColorMode, setScanColorMode] = useState<string>('1')
+  const [showScannerSettings, setShowScannerSettings] = useState(false)
 
   useEffect(() => {
     loadOpenCV().then(() => setCvLoaded(true))
@@ -117,6 +124,7 @@ export default function DocScannerModal({
       setCropping(false)
       setScanning(false)
       setScanError('')
+      setShowScannerSettings(false)
       imgRef.current = null
       pendingRef.current = null
       if (fileRef.current) fileRef.current.value = ''
@@ -130,23 +138,30 @@ export default function DocScannerModal({
   }, [open, scannersLoaded])
 
   const fetchScanners = async () => {
+    setScannersLoading(true)
     try {
       const res = await fetch('/api/scan')
       const data = await res.json()
       if (data.scanners && data.scanners.length > 0) {
         setScanners(data.scanners)
         setSelectedScanner(String(data.scanners[0].index))
+      } else {
+        setScanners([])
       }
       setScannersLoaded(true)
     } catch {
-      // Scanners not available (non-Windows or WIA not installed)
+      setScanners([])
       setScannersLoaded(true)
     }
+    setScannersLoading(false)
   }
 
   // Direct TWAIN/WIA scan — no external window
   const handleDirectScan = async () => {
-    if (!selectedScanner) return
+    if (!selectedScanner) {
+      setScanError('يرجى اختيار سكنر أولاً')
+      return
+    }
     setScanning(true)
     setScanError('')
 
@@ -157,7 +172,8 @@ export default function DocScannerModal({
         body: JSON.stringify({
           mode: 'scan',
           scannerIndex: parseInt(selectedScanner),
-          resolution: 200,
+          resolution: parseInt(scanResolution),
+          colorMode: parseInt(scanColorMode),
         }),
       })
       const data = await res.json()
@@ -171,16 +187,21 @@ export default function DocScannerModal({
       if (data.success && data.image) {
         // Load the scanned image directly into the canvas
         loadImageFromDataUrl(data.image)
+        setScanning(false)
+      } else {
+        setScanError('لم يتم استلام صورة من السكنر')
+        setScanning(false)
       }
-    } catch {
-      setScanError('تعذر الاتصال بالسكنر. تأكد من تشغيله وتثبيت التعريفات.')
+    } catch (err) {
+      setScanError('تعذر الاتصال بخدمة المسح الضوئي. تأكد من تشغيل السكنر وتثبيت التعريفات.')
+      setScanning(false)
     }
-    setScanning(false)
   }
 
   const loadImageFromDataUrl = useCallback((dataUrl: string) => {
     setStatus('loading')
     setCorners(null)
+    setScanError('')
 
     const img = new window.Image()
 
@@ -497,6 +518,7 @@ export default function DocScannerModal({
     setStatus('idle')
     setCorners(null)
     setScanError('')
+    setShowScannerSettings(false)
     imgRef.current = null
     pendingRef.current = null
     if (fileRef.current) fileRef.current.value = ''
@@ -510,6 +532,9 @@ export default function DocScannerModal({
             <ScanLine className="h-5 w-5" />
             {title}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            مسح المستندات ضوئياً وتشذيبها
+          </DialogDescription>
         </DialogHeader>
 
         {/* Scanning in progress */}
@@ -517,7 +542,7 @@ export default function DocScannerModal({
           <div className="flex flex-col items-center justify-center min-h-[200px] gap-4">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
             <p className="text-base font-medium">جاري المسح الضوئي من السكنر...</p>
-            <p className="text-sm text-muted-foreground">يرجى الانتظار حتى يتم المسح</p>
+            <p className="text-sm text-muted-foreground">يرجى الانتظار حتى يتم المسح (قد يستغرق بضع دقائق)</p>
           </div>
         )}
 
@@ -562,32 +587,115 @@ export default function DocScannerModal({
                 </div>
 
                 <div className="space-y-3 p-4 bg-muted/30 rounded-xl border">
+                  {/* Scanner selection */}
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">اختر السكنر</Label>
-                    <Select value={selectedScanner} onValueChange={setSelectedScanner}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="اختر السكنر" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {scanners.map((s) => (
-                          <SelectItem key={s.index} value={String(s.index)}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex gap-2">
+                      <Select value={selectedScanner} onValueChange={setSelectedScanner}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="اختر السكنر" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {scanners.map((s) => (
+                            <SelectItem key={s.index} value={String(s.index)}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={fetchScanners}
+                        disabled={scannersLoading}
+                        title="تحديث قائمة السكنرات"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${scannersLoading ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
                   </div>
+
+                  {/* Scanner settings toggle */}
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowScannerSettings(!showScannerSettings)}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    {showScannerSettings ? 'إخفاء إعدادات المسح' : 'إعدادات المسح الضوئي'}
+                  </button>
+
+                  {/* Scanner settings panel */}
+                  {showScannerSettings && (
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-background rounded-lg border">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">الدقة (DPI)</Label>
+                        <Select value={scanResolution} onValueChange={setScanResolution}>
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="100">100 DPI - سريع</SelectItem>
+                            <SelectItem value="150">150 DPI - متوسط</SelectItem>
+                            <SelectItem value="200">200 DPI - جيد</SelectItem>
+                            <SelectItem value="300">300 DPI - عالي</SelectItem>
+                            <SelectItem value="600">600 DPI - عالي جداً</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-medium">نوع الألوان</Label>
+                        <Select value={scanColorMode} onValueChange={setScanColorMode}>
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">ملون</SelectItem>
+                            <SelectItem value="2">تدرج رمادي</SelectItem>
+                            <SelectItem value="4">أبيض وأسود</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scan button */}
                   <Button
                     type="button"
                     className="w-full gap-2 h-11"
                     onClick={handleDirectScan}
-                    disabled={!selectedScanner}
+                    disabled={!selectedScanner || scanning}
                   >
                     <ScanLine className="h-4 w-4" />
                     مسح ضوئي مباشر
                   </Button>
+
+                  <p className="text-xs text-muted-foreground text-center">
+                    سيتم المسح مباشرة من السكنر بدون فتح أي نافذة خارجية
+                  </p>
                 </div>
               </>
+            )}
+
+            {/* No scanners message with retry */}
+            {scannersLoaded && scanners.length === 0 && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                <ScanLine className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+                <p className="text-sm font-medium text-amber-700">لم يتم العثور على سكنر</p>
+                <p className="text-xs text-amber-600 mt-1">
+                  تأكد من تشغيل السكنر وتوصيله بالحاسبة وتثبيت تعريفات WIA
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 gap-2"
+                  onClick={fetchScanners}
+                  disabled={scannersLoading}
+                >
+                  <RefreshCw className={`h-3 w-3 ${scannersLoading ? 'animate-spin' : ''}`} />
+                  إعادة البحث عن السكنر
+                </Button>
+              </div>
             )}
           </div>
         )}
