@@ -18,6 +18,13 @@ function isWindows() {
   return os.platform() === 'win32'
 }
 
+// Find PowerShell executable with full path
+function getPowerShellPath(): string {
+  if (!isWindows()) return 'powershell'
+  const sysRoot = process.env.SystemRoot || process.env.SYSTEMROOT || 'C:\\Windows'
+  return path.join(sysRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+}
+
 // GET /api/scan — List available TWAIN/WIA scanners
 export async function GET() {
   if (!isWindows()) {
@@ -30,19 +37,29 @@ export async function GET() {
 
   try {
     const scriptPath = getScriptPath()
+    const psPath = getPowerShellPath()
 
     // Check if script exists
     try {
       await stat(scriptPath)
     } catch {
       return NextResponse.json({
-        error: 'ملف script المسح الضوئي غير موجود',
+        error: 'ملف script المسح الضوئي غير موجود في: ' + scriptPath,
         scanners: [],
-        scriptPath,
       })
     }
 
-    const { stdout, stderr } = await execFileAsync('powershell.exe', [
+    // Check if PowerShell exists
+    try {
+      await stat(psPath)
+    } catch {
+      return NextResponse.json({
+        error: 'PowerShell غير موجود في: ' + psPath,
+        scanners: [],
+      })
+    }
+
+    const { stdout, stderr } = await execFileAsync(psPath, [
       '-ExecutionPolicy', 'Bypass',
       '-NoProfile',
       '-NonInteractive',
@@ -77,10 +94,10 @@ export async function GET() {
     const msg = error?.message || ''
     let userMsg = 'تعذر الوصول إلى السكنر. تأكد من تثبيت تعريفات TWAIN/WIA.'
 
-    if (msg.includes('ENOENT') || msg.includes('powershell')) {
+    if (msg.includes('ENOENT')) {
       userMsg = 'تعذر تشغيل PowerShell. تأكد من أنك تعمل على نظام Windows.'
     } else if (msg.includes('EPERM') || msg.includes('EACCES')) {
-      userMsg = 'ليس لديك صلاحية تشغيل المسح الضوئي. قم بتشغيل المتصفح كمسؤول.'
+      userMsg = 'ليس لديك صلاحية تشغيل المسح الضوئي. حاول تشغيل المتصفح كمسؤول.'
     }
 
     return NextResponse.json({
@@ -107,6 +124,7 @@ export async function POST(request: Request) {
     const colorMode = body.colorMode || 1  // 1=Color, 2=Grayscale, 4=B&W
 
     const scriptPath = getScriptPath()
+    const psPath = getPowerShellPath()
 
     // Check if script exists
     try {
@@ -114,6 +132,16 @@ export async function POST(request: Request) {
     } catch {
       return NextResponse.json(
         { error: 'ملف script المسح الضوئي غير موجود في: ' + scriptPath },
+        { status: 500 }
+      )
+    }
+
+    // Check if PowerShell exists
+    try {
+      await stat(psPath)
+    } catch {
+      return NextResponse.json(
+        { error: 'PowerShell غير موجود في: ' + psPath },
         { status: 500 }
       )
     }
@@ -133,12 +161,13 @@ export async function POST(request: Request) {
       '-ColorMode', String(colorMode),
     ]
 
-    console.log('Scan command args:', args.join(' '))
+    console.log('Scan command:', psPath, args.join(' '))
 
     // Scan can take up to 3 minutes
-    const { stdout, stderr } = await execFileAsync('powershell.exe', args, {
+    const { stdout, stderr } = await execFileAsync(psPath, args, {
       timeout: 180000,
-      windowsHide: true,  // Hide the PowerShell window
+      windowsHide: true,
+      env: { ...process.env },
     })
 
     const output = stdout.trim()
@@ -209,10 +238,10 @@ export async function POST(request: Request) {
 
     let userMsg = 'تعذر إتمام المسح الضوئي. تأكد من تثبيت تعريفات السكنر (TWAIN/WIA).'
 
-    if (msg.includes('ENOENT') || msg.includes('powershell')) {
+    if (msg.includes('ENOENT')) {
       userMsg = 'تعذر تشغيل PowerShell. تأكد من أنك تعمل على نظام Windows.'
     } else if (msg.includes('EPERM') || msg.includes('EACCES')) {
-      userMsg = 'ليس لديك صلاحية تشغيل المسح الضوئي. قم بتشغيل المتصفح كمسؤول.'
+      userMsg = 'ليس لديك صلاحية تشغيل المسح الضوئي. حاول تشغيل المتصفح كمسؤول.'
     }
 
     return NextResponse.json(
