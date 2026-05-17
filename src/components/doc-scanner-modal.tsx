@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Upload, Crop, RotateCcw, Loader2, ScanLine, AlertCircle, Settings2, RefreshCw } from 'lucide-react'
+import { Upload, Crop, RotateCcw, Loader2, ScanLine, AlertCircle, Settings2, RefreshCw, Save } from 'lucide-react'
 
 const HANDLE_R = 14
 
@@ -514,6 +514,30 @@ export default function DocScannerModal({
     })
   }
 
+  // Save image directly without cropping
+  const saveDirect = () => {
+    if (!imgRef.current) return
+
+    const img = imgRef.current
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(img, 0, 0)
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          onConfirm({ blob, url })
+        }
+      },
+      'image/jpeg',
+      0.92
+    )
+  }
+
   const reset = () => {
     setStatus('idle')
     setCorners(null)
@@ -784,25 +808,36 @@ export default function DocScannerModal({
             )}
 
             {status === 'ready' && (
-              <Button
-                type="button"
-                onClick={applyCrop}
-                disabled={!cvLoaded || cropping}
-                className="gap-2"
-              >
-                {cropping ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    جاري التشذيب...
-                  </>
-                ) : (
-                  <>
-                    <Crop className="h-4 w-4" />
-                    {cvLoaded ? 'تشذيب وحفظ' : 'انتظر...'}
-                  </>
-                )}
-              </Button>
-            )}
+              <>
+                <Button
+                  type="button"
+                  onClick={saveDirect}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  حفظ مباشر
+                </Button>
+                <Button
+                  type="button"
+                  onClick={applyCrop}
+                  disabled={!cvLoaded || cropping}
+                  className="gap-2"
+                >
+                  {cropping ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      جاري التشذيب...
+                    </>
+                  ) : (
+                    <>
+                      <Crop className="h-4 w-4" />
+                      {cvLoaded ? 'تشذيب وحفظ' : 'انتظر...'}
+                    </>
+                  )}
+                </Button>
+              </>
+            )
           </div>
         </DialogFooter>
       </DialogContent>
